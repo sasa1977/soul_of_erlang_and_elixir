@@ -1,4 +1,4 @@
-defmodule MySystemWeb.LoadGenerator do
+defmodule MySystemWeb.LoadControl do
   @moduledoc false
   use Phoenix.LiveDashboard.PageBuilder
   import MySystemWeb.CoreComponents
@@ -10,7 +10,7 @@ defmodule MySystemWeb.LoadGenerator do
 
   @impl Phoenix.LiveDashboard.PageBuilder
   def menu_link(_session, _capabilities) do
-    {:ok, "Load generator"}
+    {:ok, "Load control"}
   end
 
   @impl Phoenix.LiveDashboard.PageBuilder

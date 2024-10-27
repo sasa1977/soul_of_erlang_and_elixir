@@ -20,6 +20,6 @@ defmodule MySystemWeb.Router do
 
     live_dashboard "/dashboard",
       metrics: MySystemWeb.Telemetry,
-      additional_pages: [load_generator: MySystemWeb.LoadGenerator]
+      additional_pages: [load_control: MySystemWeb.LoadControl]
   end
 end
