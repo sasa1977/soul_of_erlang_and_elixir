@@ -18,6 +18,7 @@ config :my_system, MySystemWeb.Endpoint,
     formats: [html: MySystemWeb.ErrorHTML, json: MySystemWeb.ErrorJSON],
     layout: false
   ],
+  http: [thousand_island_options: [num_acceptors: 10]],
   pubsub_server: MySystem.PubSub,
   live_view: [signing_salt: "af4jKdtR"]
 
