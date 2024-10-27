@@ -25,16 +25,14 @@ defmodule MySystemWeb.LoadControl do
   @impl Phoenix.LiveDashboard.PageBuilder
   def handle_event("schedulers_online", params, socket) do
     with {:ok, string} <- Map.fetch(params, "schedulers_online"),
-         {value, ""} <- Integer.parse(string) do
-      :erlang.system_flag(:schedulers_online, value)
-      :erlang.system_flag(:dirty_cpu_schedulers_online, value)
-    end
+         {value, ""} <- Integer.parse(string),
+         do: MySystem.LoadControl.set_num_schedulers(value)
 
     {:noreply, schedulers_online_form(socket)}
   end
 
   defp schedulers_online_form(socket) do
-    form = to_form(%{"schedulers_online" => :erlang.system_info(:schedulers_online)})
+    form = to_form(%{"schedulers_online" => MySystem.LoadControl.num_schedulers()})
     assign(socket, schedulers_online: form)
   end
 end
