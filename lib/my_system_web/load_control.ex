@@ -5,7 +5,7 @@ defmodule MySystemWeb.LoadControl do
 
   @impl Phoenix.LiveDashboard.PageBuilder
   def mount(_params, _session, socket) do
-    {:ok, schedulers_online_form(socket)}
+    {:ok, form_data(socket)}
   end
 
   @impl Phoenix.LiveDashboard.PageBuilder
@@ -16,23 +16,34 @@ defmodule MySystemWeb.LoadControl do
   @impl Phoenix.LiveDashboard.PageBuilder
   def render(assigns) do
     ~H"""
-    <.form for={@schedulers_online} phx-change="schedulers_online" phx-submit="schedulers_online">
-      <.input field={@schedulers_online[:schedulers_online]} type="number" min="1" label="schedulers" />
+    <.form for={@form} phx-submit="submit_form">
+      <.input field={@form[:schedulers_online]} type="number" min="1" label="schedulers" />
+      <.input field={@form[:jobs]} type="number" min="0" label="jobs" />
+      <button style="display:none;">Save</button>
     </.form>
     """
   end
 
   @impl Phoenix.LiveDashboard.PageBuilder
-  def handle_event("schedulers_online", params, socket) do
+  def handle_event("submit_form", params, socket) do
     with {:ok, string} <- Map.fetch(params, "schedulers_online"),
          {value, ""} <- Integer.parse(string),
          do: MySystem.LoadControl.set_num_schedulers(value)
 
-    {:noreply, schedulers_online_form(socket)}
+    with {:ok, string} <- Map.fetch(params, "jobs"),
+         {value, ""} <- Integer.parse(string),
+         do: MySystem.LoadControl.set_load(value)
+
+    {:noreply, form_data(socket)}
   end
 
-  defp schedulers_online_form(socket) do
-    form = to_form(%{"schedulers_online" => MySystem.LoadControl.num_schedulers()})
-    assign(socket, schedulers_online: form)
+  defp form_data(socket) do
+    form =
+      to_form(%{
+        "schedulers_online" => MySystem.LoadControl.num_schedulers(),
+        "jobs" => MySystem.LoadControl.target_load()
+      })
+
+    assign(socket, form: form)
   end
 end
