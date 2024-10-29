@@ -5,8 +5,17 @@ defmodule MySystemWeb.LoadControl do
 
   @impl Phoenix.LiveDashboard.PageBuilder
   def mount(_params, _session, socket) do
-    socket = assign(socket, scheduler_utilizations: [0], num_points: 600)
+    socket =
+      assign(socket,
+        scheduler_utilizations: [0],
+        success_values: [0],
+        num_points: 600,
+        successes: 0,
+        recorded_at: :erlang.monotonic_time()
+      )
+
     if connected?(socket), do: MySystem.LoadControl.subscribe()
+
     {:ok, form_data(socket)}
   end
 
@@ -19,12 +28,13 @@ defmodule MySystemWeb.LoadControl do
   def render(assigns) do
     ~H"""
     <.form for={@form} phx-submit="submit_form">
-      <.input field={@form[:schedulers_online]} type="number" min="1" label="schedulers" />
       <.input field={@form[:jobs]} type="number" min="0" label="jobs" />
+      <.input field={@form[:schedulers_online]} type="number" min="1" label="schedulers" />
       <button style="display:none;">Save</button>
     </.form>
 
     <.scheduler_utilization_chart points={@scheduler_utilizations} num_points={@num_points} />
+    <.jobs_successes_chart points={@success_values} num_points={@num_points} />
     """
   end
 
@@ -43,12 +53,23 @@ defmodule MySystemWeb.LoadControl do
 
   @impl Phoenix.LiveDashboard.PageBuilder
   def handle_info({:scheduler_utilization, utilization}, socket) do
-    utilizations =
-      Enum.take([utilization | socket.assigns.scheduler_utilizations], socket.assigns.num_points)
+    recorded_at = :erlang.monotonic_time()
 
-    socket = assign(socket, :scheduler_utilizations, utilizations)
-    {:noreply, socket}
+    diff =
+      :erlang.convert_time_unit(recorded_at - socket.assigns.recorded_at, :native, :millisecond)
+
+    socket
+    |> update(:scheduler_utilizations, &Enum.take([utilization | &1], socket.assigns.num_points))
+    |> update(
+      :success_values,
+      &Enum.take([socket.assigns.successes * 1000 / diff | &1], socket.assigns.num_points)
+    )
+    |> assign(successes: 0, recorded_at: recorded_at)
+    |> then(&{:noreply, &1})
   end
+
+  def handle_info(:report_success, socket),
+    do: {:noreply, update(socket, :successes, &(&1 + 1))}
 
   defp form_data(socket) do
     form =
@@ -65,7 +86,7 @@ defmodule MySystemWeb.LoadControl do
       Map.merge(assigns, %{
         width: assigns.num_points,
         height: 500,
-        title: "Scheduler utilization",
+        title: "scheduler usage",
         legends: Enum.map([0, 25, 50, 75, 100], &%{title: "#{&1}%", at: &1 / 100})
       })
 
@@ -74,9 +95,45 @@ defmodule MySystemWeb.LoadControl do
     """
   end
 
+  defp jobs_successes_chart(assigns) do
+    max_rate = Enum.max(assigns.points)
+
+    order_of_magnitude =
+      if max_rate < 10, do: 1, else: round(:math.pow(10, floor(:math.log10(max_rate)) - 1))
+
+    quantized_max_rate = max(round(max_rate / order_of_magnitude) * order_of_magnitude, 1)
+    step = max(quantize(quantized_max_rate / 5, order_of_magnitude), 1)
+
+    points = Enum.map(assigns.points, &(&1 / max(max_rate, 1)))
+
+    legends =
+      0
+      |> Stream.iterate(&(&1 + step))
+      |> Stream.take_while(&(&1 <= max_rate))
+      |> Enum.map(&%{title: human_readable_int(&1), at: &1 / max(max_rate, 1)})
+
+    assigns =
+      Map.merge(assigns, %{
+        width: assigns.num_points,
+        height: 500,
+        title: "successful jobs/second",
+        legends: legends,
+        points: points
+      })
+
+    ~H"""
+    <.graph {assigns} />
+    """
+  end
+
+  defp quantize(num, quant), do: round(num / quant) * quant
+
+  defp human_readable_int(num) when num > 0 and rem(num, 1000) == 0, do: "#{div(num, 1000)}k"
+  defp human_readable_int(num), do: num
+
   defp graph(assigns) do
     ~H"""
-    <div>
+    <span>
       <svg viewBox={"0 0 #{@width + 150} #{@height + 150}"} height={@height} class="chart">
         <style>
           .title { font-size: 30px;}
@@ -127,7 +184,7 @@ defmodule MySystemWeb.LoadControl do
           <polyline fill="none" stroke="#0074d9" stroke-width="2" points={points(assigns)} />
         </g>
       </svg>
-    </div>
+    </span>
     """
   end
 
@@ -144,7 +201,7 @@ defmodule MySystemWeb.LoadControl do
 
   defp moving_averages(values, size) do
     values
-    |> Enum.chunk_every(size, 1, [0])
+    |> Enum.chunk_every(size, 1, :discard)
     |> Enum.map(fn list -> Enum.sum(list) / size end)
   end
 

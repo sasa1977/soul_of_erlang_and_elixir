@@ -83,6 +83,7 @@ defmodule MySystem.LoadControl do
     _ = Enum.reduce(1..100, 0, &(&1 + &2))
     :erlang.garbage_collect()
     Process.sleep(1000)
+    notify(:report_success)
     worker_loop()
   end
 
