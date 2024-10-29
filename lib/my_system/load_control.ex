@@ -20,10 +20,26 @@ defmodule MySystem.LoadControl do
   def num_schedulers,
     do: :erlang.system_info(:schedulers_online)
 
+  def subscribe do
+    Registry.register(__MODULE__.Notifications, :subscriber, nil)
+    :ok
+  end
+
+  def notify(message) do
+    for {pid, _value} <- Registry.lookup(__MODULE__.Notifications, :subscriber),
+        do: {send(pid, message)}
+
+    :ok
+  end
+
   @impl GenServer
   def init(_arg) do
     :ets.new(__MODULE__, [:named_table, :public, read_concurrency: true, write_concurrency: true])
     :ets.insert(__MODULE__, {:target_load, 0})
+
+    Parent.start_child({Registry, name: __MODULE__.Notifications, keys: :duplicate})
+    Parent.start_child(MySystem.LoadControl.SchedulerMonitor)
+
     {:ok, nil}
   end
 
