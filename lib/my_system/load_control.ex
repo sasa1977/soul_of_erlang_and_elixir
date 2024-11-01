@@ -32,6 +32,8 @@ defmodule MySystem.LoadControl do
     :ok
   end
 
+  def num_points, do: 600
+
   @impl GenServer
   def init(_arg) do
     :ets.new(__MODULE__, [:named_table, :public, read_concurrency: true, write_concurrency: true])
@@ -40,7 +42,9 @@ defmodule MySystem.LoadControl do
     Parent.start_child({Registry, name: __MODULE__.Notifications, keys: :duplicate})
     Parent.start_child(MySystem.LoadControl.SchedulerMonitor)
 
-    {:ok, nil}
+    Process.send_after(self(), :aggregate_successes, 100)
+
+    {:ok, %{success_values: [], successes: 0, recorded_at: :erlang.monotonic_time()}}
   end
 
   @impl GenServer
@@ -67,24 +71,42 @@ defmodule MySystem.LoadControl do
     {:noreply, state}
   end
 
+  def handle_cast(:worker_success, state),
+    do: {:noreply, %{state | successes: state.successes + 1}}
+
+  @impl GenServer
+  def handle_info(:aggregate_successes, state) do
+    now = :erlang.monotonic_time()
+    Process.send_after(self(), :aggregate_successes, 100)
+
+    diff = :erlang.convert_time_unit(now - state.recorded_at, :native, :millisecond)
+    success_value = state.successes * 1000 / diff
+    success_values = Enum.take([success_value | state.success_values], num_points())
+
+    notify({__MODULE__, :success_values, success_values})
+
+    {:noreply, %{state | successes: 0, recorded_at: now, success_values: success_values}}
+  end
+
   defp start_worker(id) do
+    parent = self()
+
     Parent.start_child(%{
       id: {:worker, id},
-      start: {Task, :start_link, [&run_worker/0]}
+      start: {Task, :start_link, [fn -> run_worker(parent) end]}
     })
   end
 
-  defp run_worker do
+  defp run_worker(parent) do
     Process.sleep(:rand.uniform(1000))
-    worker_loop()
-  end
 
-  defp worker_loop do
-    _ = Enum.reduce(1..100, 0, &(&1 + &2))
-    :erlang.garbage_collect()
-    Process.sleep(1000)
-    notify(:report_success)
-    worker_loop()
+    Stream.repeatedly(fn ->
+      _ = Enum.reduce(1..100, 0, &(&1 + &2))
+      :erlang.garbage_collect()
+      Process.sleep(1000)
+      GenServer.cast(parent, :worker_success)
+    end)
+    |> Stream.run()
   end
 
   defp get_value(key) do

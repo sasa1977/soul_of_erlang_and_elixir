@@ -5,17 +5,8 @@ defmodule MySystemWeb.LoadControl do
 
   @impl Phoenix.LiveDashboard.PageBuilder
   def mount(_params, _session, socket) do
-    socket =
-      assign(socket,
-        scheduler_utilizations: [0],
-        success_values: [0],
-        num_points: 600,
-        successes: 0,
-        recorded_at: :erlang.monotonic_time()
-      )
-
+    socket = assign(socket, scheduler_utilizations: [], success_values: [])
     if connected?(socket), do: MySystem.LoadControl.subscribe()
-
     {:ok, form_data(socket)}
   end
 
@@ -33,8 +24,12 @@ defmodule MySystemWeb.LoadControl do
       <button style="display:none;">Save</button>
     </.form>
 
-    <.scheduler_utilization_chart points={@scheduler_utilizations} num_points={@num_points} />
-    <.jobs_successes_chart points={@success_values} num_points={@num_points} />
+    <.jobs_successes_chart points={@success_values} num_points={MySystem.LoadControl.num_points()} />
+
+    <.scheduler_utilization_chart
+      points={@scheduler_utilizations}
+      num_points={MySystem.LoadControl.num_points()}
+    />
     """
   end
 
@@ -52,24 +47,14 @@ defmodule MySystemWeb.LoadControl do
   end
 
   @impl Phoenix.LiveDashboard.PageBuilder
-  def handle_info({:scheduler_utilization, utilization}, socket) do
-    recorded_at = :erlang.monotonic_time()
-
-    diff =
-      :erlang.convert_time_unit(recorded_at - socket.assigns.recorded_at, :native, :millisecond)
-
+  def handle_info({:scheduler_utilizations, utilizations}, socket) do
     socket
-    |> update(:scheduler_utilizations, &Enum.take([utilization | &1], socket.assigns.num_points))
-    |> update(
-      :success_values,
-      &Enum.take([socket.assigns.successes * 1000 / diff | &1], socket.assigns.num_points)
-    )
-    |> assign(successes: 0, recorded_at: recorded_at)
+    |> assign(:scheduler_utilizations, utilizations)
     |> then(&{:noreply, &1})
   end
 
-  def handle_info(:report_success, socket),
-    do: {:noreply, update(socket, :successes, &(&1 + 1))}
+  def handle_info({MySystem.LoadControl, :success_values, values}, socket),
+    do: {:noreply, assign(socket, :success_values, values)}
 
   defp form_data(socket) do
     form =
@@ -96,7 +81,7 @@ defmodule MySystemWeb.LoadControl do
   end
 
   defp jobs_successes_chart(assigns) do
-    max_rate = Enum.max(assigns.points)
+    max_rate = Enum.max(assigns.points, &>=/2, fn -> 0 end)
 
     order_of_magnitude =
       if max_rate < 10, do: 1, else: round(:math.pow(10, floor(:math.log10(max_rate)) - 1))
