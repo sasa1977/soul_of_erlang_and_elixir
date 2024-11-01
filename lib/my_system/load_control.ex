@@ -54,19 +54,9 @@ defmodule MySystem.LoadControl do
     current_load = length(active_workers)
     diff = target_load - current_load
 
-    cond do
-      diff == 0 ->
-        :ok
-
-      diff > 0 ->
-        Enum.each(0..(diff - 1), &start_worker(current_load + &1))
-
-      diff < 0 ->
-        active_workers
-        |> Enum.sort_by(& &1.id, :desc)
-        |> Enum.take(abs(diff))
-        |> Enum.each(&Parent.shutdown_child(&1.id))
-    end
+    # If diff is negative, redundant workers will stop themselves. This reduces the load on
+    # the parent process.
+    if diff > 0, do: Enum.each(0..(diff - 1), &start_worker(current_load + &1))
 
     {:noreply, state}
   end
@@ -93,11 +83,13 @@ defmodule MySystem.LoadControl do
 
     Parent.start_child(%{
       id: {:worker, id},
-      start: {Task, :start_link, [fn -> run_worker(parent) end]}
+      start: {Task, :start_link, [fn -> run_worker(parent, id) end]},
+      restart: :transient,
+      ephemeral?: true
     })
   end
 
-  defp run_worker(parent) do
+  defp run_worker(parent, id) do
     Process.sleep(:rand.uniform(1000))
 
     Stream.repeatedly(fn ->
@@ -106,6 +98,7 @@ defmodule MySystem.LoadControl do
       Process.sleep(1000)
       GenServer.cast(parent, :worker_success)
     end)
+    |> Stream.take_while(fn _ -> id < target_load() end)
     |> Stream.run()
   end
 
