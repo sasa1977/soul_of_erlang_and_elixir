@@ -42,7 +42,10 @@ defmodule MySystem.LoadControl do
     Parent.start_child({Registry, name: __MODULE__.Notifications, keys: :duplicate})
     Parent.start_child(MySystem.LoadControl.SchedulerMonitor)
 
-    Process.send_after(self(), :aggregate_successes, 100)
+    Parent.start_child(%{
+      id: __MODULE__.SuccessReporter,
+      start: {Task, :start_link, [&run_success_reporter/0]}
+    })
 
     {:ok, %{success_values: [], successes: 0, recorded_at: :erlang.monotonic_time()}}
   end
@@ -79,24 +82,22 @@ defmodule MySystem.LoadControl do
   end
 
   defp start_worker(id) do
-    parent = self()
-
     Parent.start_child(%{
       id: {:worker, id},
-      start: {Task, :start_link, [fn -> run_worker(parent, id) end]},
+      start: {Task, :start_link, [fn -> run_worker(id) end]},
       restart: :transient,
       ephemeral?: true
     })
   end
 
-  defp run_worker(parent, id) do
+  defp run_worker(id) do
     Process.sleep(:rand.uniform(1000))
 
     Stream.repeatedly(fn ->
       _ = Enum.reduce(1..100, 0, &(&1 + &2))
       :erlang.garbage_collect()
+      :ets.update_counter(__MODULE__, :successes, 1, {:successes, 0})
       Process.sleep(1000)
-      GenServer.cast(parent, :worker_success)
     end)
     |> Stream.take_while(fn _ -> id < target_load() end)
     |> Stream.run()
@@ -105,5 +106,32 @@ defmodule MySystem.LoadControl do
   defp get_value(key) do
     [{^key, value}] = :ets.lookup(__MODULE__, key)
     value
+  end
+
+  defp run_success_reporter do
+    now = :erlang.monotonic_time()
+
+    Stream.iterate(
+      %{recorded_at: now, success_values: []},
+      fn state ->
+        Process.sleep(100)
+        now = :erlang.monotonic_time()
+
+        successes =
+          case :ets.take(__MODULE__, :successes) do
+            [{:successes, value}] -> value
+            [] -> 0
+          end
+
+        diff = :erlang.convert_time_unit(now - state.recorded_at, :native, :millisecond)
+        success_value = successes * 1000 / diff
+        success_values = Enum.take([success_value | state.success_values], num_points())
+
+        notify({__MODULE__, :success_values, success_values})
+
+        %{state | recorded_at: now, success_values: success_values}
+      end
+    )
+    |> Stream.run()
   end
 end
