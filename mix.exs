@@ -9,7 +9,8 @@ defmodule MySystem.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
-      deps: deps()
+      deps: deps(),
+      releases: releases()
     ]
   end
 
@@ -72,7 +73,18 @@ defmodule MySystem.MixProject do
         "tailwind my_system --minify",
         "esbuild my_system --minify",
         "phx.digest"
+      ],
+      release: [
+        "assets.deploy",
+        "compile",
+        "release --overwrite"
       ]
     ]
   end
+
+  defp releases,
+    do: [my_system: [cookie: "super_secret"]]
+
+  def cli,
+    do: [preferred_envs: [release: :prod]]
 end

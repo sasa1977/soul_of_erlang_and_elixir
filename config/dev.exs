@@ -13,7 +13,6 @@ config :my_system, MySystemWeb.Endpoint,
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
-  secret_key_base: "MzPIcum8PemED54B0UPoqmQ+yeo/tbGG/wg0BqOTxdLltiM0oj5yTJv8xkb6ZM/A",
   watchers: [
     esbuild: {Esbuild, :install_and_run, [:my_system, ~w(--sourcemap=inline --watch)]},
     tailwind: {Tailwind, :install_and_run, [:my_system, ~w(--watch)]}
