@@ -3,3 +3,6 @@
 @import "tailwindcss/utilities";
 
 /* This file is for your main application CSS */
+.sumForm, .sumForm input {
+  font-size: 30px !important;
+}

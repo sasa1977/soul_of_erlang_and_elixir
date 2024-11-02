@@ -18,6 +18,8 @@ defmodule MySystemWeb.Router do
   scope "/", MySystemWeb do
     pipe_through :browser
 
+    live "/", Math
+
     live_dashboard "/dashboard",
       metrics: MySystemWeb.Telemetry,
       additional_pages: [load_control: MySystemWeb.LoadControl]
