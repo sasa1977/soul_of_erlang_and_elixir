@@ -14,9 +14,7 @@ defmodule MySystem.Application do
       MySystemWeb.Telemetry,
       {DNSCluster, query: Application.get_env(:my_system, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: MySystem.PubSub},
-      # Start a worker by calling: MySystem.Worker.start_link(arg)
-      # {MySystem.Worker, arg},
-      # Start to serve requests, typically the last entry
+      MySystem.Math,
       MySystemWeb.Endpoint
     ]
 
