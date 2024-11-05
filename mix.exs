@@ -78,7 +78,8 @@ defmodule MySystem.MixProject do
         "assets.deploy",
         "compile",
         "release --overwrite"
-      ]
+      ],
+      upgrade: ["compile", "my_system.upgrade"]
     ]
   end
 
@@ -86,5 +87,5 @@ defmodule MySystem.MixProject do
     do: [my_system: [cookie: "super_secret"]]
 
   def cli,
-    do: [preferred_envs: [release: :prod]]
+    do: [preferred_envs: [release: :prod, update: :prod]]
 end
