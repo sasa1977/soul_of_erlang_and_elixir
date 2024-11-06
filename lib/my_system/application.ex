@@ -15,7 +15,7 @@ defmodule MySystem.Application do
       {DNSCluster, query: Application.get_env(:my_system, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: MySystem.PubSub},
       MySystem.Math,
-      MySystemWeb.Endpoint
+      {MySystemWeb.Endpoint, http: [port: 4001]}
     ]
 
     # See https://hexdocs.pm/elixir/Supervisor.html

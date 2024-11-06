@@ -43,6 +43,11 @@ defmodule MySystem.LoadControl do
     Parent.start_child(MySystem.LoadControl.SchedulerMonitor)
 
     Parent.start_child(%{
+      id: __MODULE__.ClusterLoad,
+      start: {Task, :start_link, [&run_cluster_load/0]}
+    })
+
+    Parent.start_child(%{
       id: __MODULE__.SuccessReporter,
       start: {Task, :start_link, [&run_success_reporter/0]}
     })
@@ -53,9 +58,9 @@ defmodule MySystem.LoadControl do
   @impl GenServer
   def handle_cast(:load_changed, state) do
     active_workers = Enum.filter(Parent.children(), &match?(%{id: {:worker, _id}}, &1))
-    target_load = target_load()
+    local_load = local_load()
     current_load = length(active_workers)
-    diff = target_load - current_load
+    diff = local_load - current_load
 
     # If diff is negative, redundant workers will stop themselves. This reduces the load on
     # the parent process.
@@ -99,7 +104,7 @@ defmodule MySystem.LoadControl do
       :ets.update_counter(__MODULE__, :successes, 1, {:successes, 0})
       Process.sleep(1000)
     end)
-    |> Stream.take_while(fn _ -> id < target_load() end)
+    |> Stream.take_while(fn _ -> id < local_load() end)
     |> Stream.run()
   end
 
@@ -133,5 +138,34 @@ defmodule MySystem.LoadControl do
       end
     )
     |> Stream.run()
+  end
+
+  defp local_load do
+    num_nodes =
+      Node.list([:this, :visible])
+      |> Enum.map(&to_string/1)
+      |> Enum.filter(&(&1 =~ ~r/^my_system_\d+@/))
+      |> Enum.count()
+
+    round(target_load() / max(num_nodes, 1))
+  end
+
+  defp run_cluster_load do
+    with {:ok, nodes} <- :erl_epmd.names(~c"127.0.0.1") do
+      nodes =
+        for {node_name, _epmd_port} <- nodes,
+            node_name = to_string(node_name),
+            node_name =~ ~r/^my_system_\d+$/,
+            node = :"#{node_name}@127.0.0.1",
+            do: node
+
+      {results, _} = :rpc.multicall(nodes, __MODULE__, :target_load, [])
+      results = Enum.filter(results, &is_integer/1)
+      max_load = Enum.max(results, fn -> 0 end)
+      set_load(max_load)
+    end
+
+    Process.sleep(:timer.seconds(1))
+    run_cluster_load()
   end
 end

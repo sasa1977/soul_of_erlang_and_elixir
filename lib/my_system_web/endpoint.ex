@@ -1,6 +1,18 @@
 defmodule MySystemWeb.Endpoint do
   use Phoenix.Endpoint, otp_app: :my_system
 
+  defoverridable child_spec: 1
+
+  def child_spec(opts) do
+    suffix =
+      case Regex.named_captures(~r/^my_system_(?<suffix>\d+)@.+/, to_string(node())) do
+        nil -> 1
+        %{"suffix" => suffix} -> String.to_integer(suffix)
+      end
+
+    super([http: [port: 4000 + suffix - 1]] ++ opts)
+  end
+
   # The session will be stored in the cookie and signed,
   # this means its contents can be read but not tampered with.
   # Set :encryption_salt if you would also like to encrypt it.

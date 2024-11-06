@@ -79,7 +79,12 @@ defmodule MySystem.MixProject do
         "compile",
         "release --overwrite"
       ],
-      upgrade: ["compile", "my_system.upgrade"]
+      upgrade: ["compile", "my_system.upgrade"],
+      add_node: [
+        "compile",
+        "my_system.setup_node",
+        "phx.server"
+      ]
     ]
   end
 
