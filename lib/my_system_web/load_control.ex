@@ -134,7 +134,7 @@ defmodule MySystemWeb.LoadControl do
               y="-50"
               fill="black"
             >
-              <%= @title %>
+              {@title}
             </text>
           </g>
 
@@ -147,7 +147,7 @@ defmodule MySystemWeb.LoadControl do
                 y={"#{y(legend.at, @height)}"}
                 fill="black"
               >
-                <%= legend.title %>
+                {legend.title}
               </text>
             </g>
 
