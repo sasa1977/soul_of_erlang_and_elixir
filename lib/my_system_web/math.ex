@@ -17,7 +17,7 @@ defmodule MySystemWeb.Math do
 
       <div>
         <%= for operation <- @operations do %>
-          <div>∑(1..<%= operation.input %>) = <%= operation.result %></div>
+          <div>∑(1..{operation.input}) = {operation.result}</div>
         <% end %>
       </div>
     </div>
