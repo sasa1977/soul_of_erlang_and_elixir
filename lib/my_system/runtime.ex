@@ -1,8 +1,6 @@
 defmodule Runtime do
   def trace(pid) do
     Task.async(fn ->
-      :erlang.trace(pid, true, [:call])
-
       try do
         :erlang.trace(pid, true, [:call])
       rescue
